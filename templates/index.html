@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAG Dependency Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <div class="bg-blue-600 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <h1 class="text-3xl font-bold flex items-center">
+                <i class="fas fa-project-diagram mr-3"></i>
+                DAG Dependency Analyzer
+            </h1>
+            <p class="text-blue-100 mt-2">Advanced code quality assessment and impact analysis for Airflow DAGs</p>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Input Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Repository Analysis</h2>
+            
+            <form id="analysisForm" class="space-y-4">
+                <!-- Source Type Selection -->
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mb-2 block">Source Type</label>
+                    <div class="flex space-x-4">
+                        <label class="flex items-center">
+                            <input type="radio" name="sourceType" value="git" class="mr-2" checked>
+                            <i class="fab fa-git-alt mr-1"></i>
+                            Git Repository
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="sourceType" value="local" class="mr-2">
+                            <i class="fas fa-folder mr-1"></i>
+                            Local Directory
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Source Path Input -->
+                <div>
+                    <label for="sourcePath" class="text-sm font-medium text-gray-700 mb-2 block">
+                        <span id="pathLabel">Git Repository URL</span>
+                    </label>
+                    <input type="text" id="sourcePath" name="sourcePath" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="https://github.com/username/repository.git" required>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="analyzeBtn" 
+                        class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-search mr-2"></i>
+                    Analyze Repository
+                </button>
+            </form>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="hidden mt-4">
+                <div class="flex items-center text-blue-600">
+                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
+                    <span>Analyzing repository... This may take a few minutes.</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                    <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 45%"></div>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div id="errorState" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                <div class="flex">
+                    <i class="fas fa-exclamation-triangle text-red-400 mr-2"></i>
+                    <div>
+                        <h4 class="text-red-800 font-medium">Analysis Failed</h4>
+                        <p id="errorMessage" class="text-red-600 text-sm mt-1"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden">
+            <!-- Summary Cards -->
+            <div id="summaryCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Cards will be populated by JavaScript -->
+            </div>
+
+            <!-- Tabs Navigation -->
+            <div class="bg-white rounded-lg shadow-md">
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-8 px-6">
+                        <button id="orchestrationTab" class="tab-button active py-4 px-1 border-b-2 font-medium text-sm">
+                            <i class="fas fa-sitemap mr-2"></i>
+                            Orchestration
+                        </button>
+                        <button id="dependenciesTab" class="tab-button py-4 px-1 border-b-2 font-medium text-sm">
+                            <i class="fas fa-code-branch mr-2"></i>
+                            Code Dependencies
+                        </button>
+                        <button id="qualityTab" class="tab-button py-4 px-1 border-b-2 font-medium text-sm">
+                            <i class="fas fa-chart-line mr-2"></i>
+                            Quality Dashboard
+                        </button>
+                        <button id="impactTab" class="tab-button py-4 px-1 border-b-2 font-medium text-sm">
+                            <i class="fas fa-exclamation-circle mr-2"></i>
+                            Impact Analysis
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="p-6">
+                    <!-- Orchestration Tab -->
+                    <div id="orchestrationContent" class="tab-content">
+                        <div class="mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">DAG Orchestration Dependencies</h3>
+                            <p class="text-gray-600">Interactive visualization of DAG trigger relationships and dataset dependencies</p>
+                        </div>
+                        <div id="orchestrationViz" class="border border-gray-200 rounded-lg" style="height: 600px;"></div>
+                        <div id="orchestrationDetails" class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <!-- Details will be populated -->
+                        </div>
+                    </div>
+
+                    <!-- Dependencies Tab -->
+                    <div id="dependenciesContent" class="tab-content hidden">
+                        <div class="mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">Code Dependencies Analysis</h3>
+                            <p class="text-gray-600">Detailed analysis of imports from common directories and external libraries</p>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div id="dependencyTree" class="bg-gray-50 p-4 rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-3">Dependency Tree</h4>
+                                <div id="dependencyTreeContent"></div>
+                            </div>
+                            <div id="commonUsage" class="bg-gray-50 p-4 rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-3">Common Module Usage</h4>
+                                <div id="commonUsageContent"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quality Tab -->
+                    <div id="qualityContent" class="tab-content hidden">
+                        <div class="mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800">Code Quality Dashboard</h3>
+                            <p class="text-gray-600">Comprehensive quality metrics and risk assessment</p>
+                        </div>
+                        
+                        <!-- Overall Health Score -->
+                        <div class="mb-6">
+                            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4 class="text-lg font-medium text-gray-800">Overall Health Score</h4>
+                                        <p class="text-gray-600">Combined quality assessment of your DAGs</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div id="overallScore" class="text-4xl font-bold text-blue-600">--</div>
+                                        <div id="scoreGrade" class="text-sm font-medium text-gray-600">Grade: --</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quality Metrics Grid -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-white p-4 border rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-3">Quality Metrics</h4>
+                                <canvas id="qualityMetricsChart" width="400" height="300"></canvas>
+                            </div>
+                            <div class="bg-white p-4 border rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-3">Risk Distribution</h4>
+                                <canvas id="riskDistributionChart" width="400" height="300"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Issues and Recommendations -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div id="topIssues" class="bg-white p-4 border rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-3">Top Issues</h4>
+                                <div id="issuesList"></div>
+                            </div>
+                            <div id="recommendations" class="bg-white p-4 border rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-3">Recommendations</h4>
+                                <div id="recommendationsList"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Impact Analysis Tab -->
+                    <div id="impactContent" class="tab-content hidden">
+                        <div class="mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800">Impact Analysis & Change Management</h3>
+                            <p class="text-gray-600">"What if" analysis and change impact assessment</p>
+                        </div>
+
+                        <!-- Change Impact Form -->
+                        <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                            <h4 class="font-medium text-gray-800 mb-3">Analyze Change Impact</h4>
+                            <form id="impactAnalysisForm" class="flex flex-wrap gap-4 items-end">
+                                <div class="flex-1 min-w-64">
+                                    <label class="text-sm font-medium text-gray-700 mb-1 block">Target File</label>
+                                    <select id="targetFile" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">Select a file...</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1 min-w-48">
+                                    <label class="text-sm font-medium text-gray-700 mb-1 block">Target Function (Optional)</label>
+                                    <input type="text" id="targetFunction" placeholder="function_name" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <button type="submit" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700">
+                                    <i class="fas fa-search mr-1"></i>
+                                    Analyze Impact
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Impact Results -->
+                        <div id="impactResults" class="hidden">
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                                <div class="bg-white p-4 border rounded-lg">
+                                    <h4 class="font-medium text-gray-800 mb-3">Risk Assessment</h4>
+                                    <div id="riskAssessment"></div>
+                                </div>
+                                <div class="bg-white p-4 border rounded-lg">
+                                    <h4 class="font-medium text-gray-800 mb-3">Direct Impacts</h4>
+                                    <div id="directImpacts"></div>
+                                </div>
+                                <div class="bg-white p-4 border rounded-lg">
+                                    <h4 class="font-medium text-gray-800 mb-3">Affected DAGs</h4>
+                                    <div id="affectedDags"></div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white p-4 border rounded-lg">
+                                <h4 class="font-medium text-gray-800 mb-3">Change Recommendations</h4>
+                                <div id="changeRecommendations"></div>
+                            </div>
+                        </div>
+
+                        <!-- Risk Matrix -->
+                        <div class="bg-white p-4 border rounded-lg mt-6">
+                            <h4 class="font-medium text-gray-800 mb-3">Risk Matrix</h4>
+                            <div id="riskMatrix"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

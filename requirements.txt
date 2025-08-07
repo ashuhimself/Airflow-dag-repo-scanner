@@ -1,0 +1,8 @@
+Flask==2.3.3
+GitPython==3.1.40
+radon==6.0.1
+vulture==2.10
+bandit==1.7.5
+networkx==3.2.1
+astroid==3.0.1
+Werkzeug==2.3.7
