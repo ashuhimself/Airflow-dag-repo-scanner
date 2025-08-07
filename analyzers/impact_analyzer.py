@@ -39,7 +39,9 @@ class ImpactAnalyzer:
             'indirect_impacts': [],
             'affected_dags': [],
             'risk_assessment': {},
-            'recommendations': []
+            'recommendations': [],
+            'all_functions': self._get_functions_and_classes_from_file(target_file),
+            'all_classes': self._get_functions_and_classes_from_file(target_file, classes_only=True)
         }
         
         # Find all files that import from the target file
@@ -545,3 +547,67 @@ class ImpactAnalyzer:
         })
         
         return recommendations
+    
+    def get_all_scannable_files(self):
+        """Get all Python files that can be scanned for impact analysis."""
+        scannable_files = []
+        
+        for file_path in self.python_files:
+            relative_path = os.path.relpath(file_path, self.directory)
+            
+            # Skip __pycache__ and other generated files
+            if '__pycache__' in relative_path or '.pyc' in relative_path:
+                continue
+            
+            # Get basic file info
+            file_info = {
+                'path': relative_path,
+                'absolute_path': file_path,
+                'is_dag': self._file_contains_dag(file_path),
+                'functions': [],
+                'classes': [],
+                'imports': len(self._analyze_file_imports(file_path)),
+                'size_lines': self._get_file_line_count(file_path)
+            }
+            
+            # Extract functions and classes
+            functions_classes = self._get_functions_and_classes_from_file(file_path, get_both=True)
+            file_info['functions'] = functions_classes.get('functions', [])
+            file_info['classes'] = functions_classes.get('classes', [])
+            
+            scannable_files.append(file_info)
+        
+        # Sort by potential impact (DAGs first, then by import count, then by size)
+        scannable_files.sort(key=lambda x: (
+            not x['is_dag'],  # DAGs first
+            -x['imports'],    # More imports = higher potential impact
+            -x['size_lines']  # Larger files = higher potential impact
+        ))
+        
+        return scannable_files
+    
+    def _get_file_line_count(self, file_path):
+        """Get the number of lines in a file."""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return sum(1 for _ in f)
+        except Exception:
+            return 0
+    
+    def _get_decorator_name(self, decorator_node):
+        """Extract decorator name from AST node."""
+        if isinstance(decorator_node, ast.Name):
+            return decorator_node.id
+        elif isinstance(decorator_node, ast.Call) and isinstance(decorator_node.func, ast.Name):
+            return decorator_node.func.id
+        elif isinstance(decorator_node, ast.Attribute):
+            return decorator_node.attr
+        return 'unknown'
+    
+    def _get_base_name(self, base_node):
+        """Extract base class name from AST node."""
+        if isinstance(base_node, ast.Name):
+            return base_node.id
+        elif isinstance(base_node, ast.Attribute):
+            return f"{base_node.value.id if hasattr(base_node.value, 'id') else 'unknown'}.{base_node.attr}"
+        return 'unknown'

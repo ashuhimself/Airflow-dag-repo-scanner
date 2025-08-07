@@ -123,6 +123,63 @@ def analyze():
             'type': type(e).__name__
         }), 500
 
+@app.route('/api/scannable-files', methods=['POST'])
+def get_scannable_files():
+    """Get all files that can be scanned for impact analysis."""
+    repo_analyzer = None
+    try:
+        # Validate request
+        if not request.is_json:
+            return jsonify({'error': 'Request must be JSON'}), 400
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Empty request body'}), 400
+        
+        source_type = data.get('source_type')
+        source_path = data.get('source_path')
+        
+        if not all([source_type, source_path]):
+            return jsonify({'error': 'Missing required parameters: source_type, source_path'}), 400
+        
+        if source_type not in ['git', 'local']:
+            return jsonify({'error': 'Invalid source type. Must be "git" or "local"'}), 400
+        
+        repo_analyzer = RepositoryAnalyzer()
+        temp_dir = None
+        
+        try:
+            # Get working directory
+            if source_type == 'git':
+                temp_dir = repo_analyzer.clone_repository(source_path.strip())
+                working_dir = temp_dir
+            else:
+                working_dir = source_path.strip()
+                repo_analyzer.validate_local_directory(working_dir)
+            
+            # Get scannable files
+            impact_analyzer = ImpactAnalyzer(working_dir)
+            scannable_files = impact_analyzer.get_all_scannable_files()
+            
+            return jsonify({
+                'scannable_files': scannable_files,
+                'total_files': len(scannable_files)
+            })
+            
+        finally:
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    repo_analyzer.cleanup_temp_directories()
+                except Exception as cleanup_error:
+                    logging.warning(f'Failed to cleanup temp directory: {cleanup_error}')
+                    
+    except Exception as e:
+        logging.error(f'Failed to get scannable files: {str(e)}', exc_info=True)
+        return jsonify({
+            'error': f'Failed to get scannable files: {str(e)}',
+            'type': type(e).__name__
+        }), 500
+
 @app.route('/api/impact-analysis', methods=['POST'])
 def impact_analysis():
     repo_analyzer = None

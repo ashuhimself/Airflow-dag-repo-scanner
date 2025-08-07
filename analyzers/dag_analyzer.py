@@ -202,33 +202,78 @@ class DAGAnalyzer:
         """Analyze code dependencies for all DAGs."""
         dependencies = {}
         common_usage = defaultdict(list)
+        all_imports = defaultdict(list)  # Track all imports across DAGs
+        
+        # First pass: collect all imports
+        for dag in dags:
+            for imp in dag['imports']['functions'] + dag['imports']['from_common']:
+                module_func = f"{imp['module']}.{imp['name']}"
+                all_imports[module_func].append({
+                    'dag_id': dag['dag_id'],
+                    'file_path': dag['relative_path'],
+                    'line_number': imp['line_number'],
+                    'import_info': imp
+                })
+        
+        # Identify common code (used by 2 or more DAGs)
+        truly_common_modules = {
+            module_func: usage_list 
+            for module_func, usage_list in all_imports.items() 
+            if len(usage_list) > 1
+        }
         
         for dag in dags:
             dag_deps = {
                 'common_imports': [],
                 'external_imports': [],
                 'function_usage': [],
-                'class_usage': []
+                'class_usage': [],
+                'shared_dependencies': []  # New: dependencies shared with other DAGs
             }
             
-            # Analyze imports from common/ directories
+            # Analyze imports from traditional common/ directories
             for imp in dag['imports']['from_common']:
                 dag_deps['common_imports'].append(imp)
-                common_usage[f"{imp['module']}.{imp['name']}"].append({
+                module_func = f"{imp['module']}.{imp['name']}"
+                common_usage[module_func].append({
                     'dag_id': dag['dag_id'],
                     'file_path': dag['relative_path'],
                     'line_number': imp['line_number']
                 })
             
-            # Analyze other imports
-            for imp in dag['imports']['functions']:
-                dag_deps['external_imports'].append(imp)
+            # Analyze ALL imports for shared usage
+            for imp in dag['imports']['functions'] + dag['imports']['from_common']:
+                module_func = f"{imp['module']}.{imp['name']}"
+                
+                if module_func in truly_common_modules:
+                    # This import is used by multiple DAGs
+                    shared_with = [
+                        usage['dag_id'] for usage in truly_common_modules[module_func] 
+                        if usage['dag_id'] != dag['dag_id']
+                    ]
+                    
+                    shared_dep = dict(imp)
+                    shared_dep['shared_with_dags'] = shared_with
+                    shared_dep['total_usage_count'] = len(truly_common_modules[module_func])
+                    dag_deps['shared_dependencies'].append(shared_dep)
+                
+                # Categorize as external if not from common/
+                if 'common' not in imp.get('module', ''):
+                    dag_deps['external_imports'].append(imp)
             
             dependencies[dag['dag_id']] = dag_deps
         
         return {
             'dag_dependencies': dependencies,
-            'common_usage_map': dict(common_usage)
+            'common_usage_map': dict(common_usage),
+            'truly_common_modules': {
+                module: {
+                    'usage_count': len(usages),
+                    'used_by_dags': [u['dag_id'] for u in usages],
+                    'usages': usages
+                }
+                for module, usages in truly_common_modules.items()
+            }
         }
     
     def analyze_orchestration_dependencies(self, dags):
